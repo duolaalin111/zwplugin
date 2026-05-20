@@ -1,0 +1,17 @@
+# .NET 生成文件
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.cache
+
+# NuGet 包文件夹
+packages/
+*.nupkg
+
+# 其他不需要提交的文件
+.vs/
+.vscode/
+*.user
+*.suo
