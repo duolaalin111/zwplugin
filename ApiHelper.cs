@@ -40,7 +40,7 @@ namespace ZrxDotNetCSProject5
 
     public static class ApiHelper
     {
-        private static readonly HttpClient client = new HttpClient { BaseAddress = new Uri("http://192.168.1.108:8080/api/") };
+        private static readonly HttpClient client = new HttpClient { BaseAddress = new Uri(AppConfig.ApiFullBaseUrl) };
 
         // 获取项目列表
         public static async Task<List<Projectmodel>> GetProjectsAsync()

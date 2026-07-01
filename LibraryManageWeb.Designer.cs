@@ -34,10 +34,13 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 18F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.ClientSize = new System.Drawing.Size(480, 800);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.MinimumSize = new System.Drawing.Size(320, 500);
             this.Name = "LibraryManageWeb";
-            this.Text = "LibraryManageWeb";
-            //this.Load += new System.EventHandler(this.LibraryManageWeb_Load);
+            this.Text = "图库管理";
+            this.TopMost = false;
             this.ResumeLayout(false);
 
         }

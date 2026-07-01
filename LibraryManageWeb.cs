@@ -23,8 +23,8 @@ namespace ZrxDotNetCSProject5
     {
         private ChromiumWebBrowser browser;
         private HttpClient httpClient;
-        private string apiBaseUrl = "http://192.168.1.110:8080/";
-        private string frontendUrl = "http://localhost:5173/";
+        private string apiBaseUrl = AppConfig.ApiBaseUrl;
+        private string frontendUrl = AppConfig.FrontendUrl;
         // 添加这个属性，让 WebBridge 可以访问 httpClient
         public HttpClient HttpClient => httpClient;
 
@@ -127,7 +127,7 @@ namespace ZrxDotNetCSProject5
         public WebBridge(LibraryManageWeb parent) { _parent = parent; }
         private readonly HttpClient httpClient = new HttpClient
         {
-            BaseAddress = new Uri("http://192.168.1.110:8080/")
+            BaseAddress = new Uri(AppConfig.ApiBaseUrl)
         };
         // ... 你小伙伴原来的所有方法保持不变 ...
         public string GetProductGroups()
@@ -221,74 +221,56 @@ namespace ZrxDotNetCSProject5
             }
         }
         */
-        public async Task<string> StartImport(long typeId)
+        public async Task<string> StartImport(long typeId, string token = "")
         {
             try
             {
+                if (!string.IsNullOrEmpty(token))
+                    httpClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
-
                 if (doc == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        message = "未找到CAD文档"
-                    });
-                }
+                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
 
-                // 等待CAD命令执行完成
-                bool isSuccess = await SendCommandAndWaitAsync(
-                    doc,
-                    "ZWCAD_入库 ",
-                    "ZWCAD_入库"
-                );
+                System.Diagnostics.Debug.WriteLine($"[入库] 开始执行入库命令, typeId={typeId}");
 
+                // 1. 运行CAD入库命令，生成 DWG + PNG 文件
+                bool isSuccess = await SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
+                System.Diagnostics.Debug.WriteLine($"[入库] CAD命令完成, isSuccess={isSuccess}");
                 if (!isSuccess)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        message = "入库命令失败"
-                    });
-                }
+                    return JsonSerializer.Serialize(new { success = false, message = "入库命令失败" });
 
-                // 上传
-                bool uploadResult =
-                    await UploadDrawingsToBackend(typeId);
+                // 2. 上传生成的文件到后端API
+                var (uploadSuccess, uploadMsg) = await UploadDrawingsToBackend(typeId);
+                System.Diagnostics.Debug.WriteLine($"[入库] 上传结果: {uploadSuccess}, {uploadMsg}");
 
                 return JsonSerializer.Serialize(new
                 {
-                    success = uploadResult,
-                    message = uploadResult
-                        ? "上传成功"
-                        : "上传失败"
+                    success = uploadSuccess,
+                    message = uploadSuccess ? "入库成功" : uploadMsg
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    message = ex.ToString()
-                });
+                System.Diagnostics.Debug.WriteLine($"[入库] 异常: {ex.Message}\n{ex.StackTrace}");
+                return JsonSerializer.Serialize(new { success = false, message = ex.Message });
             }
         }
-        public async Task<string> StartExport(long drawingId)
+        public async Task<string> StartExport(long drawingId, string token = "")
         {
             try
             {
-                // ==================== 下载DWG ====================
+                httpClient.DefaultRequestHeaders.Authorization = null;
+                if (!string.IsNullOrEmpty(token))
+                    httpClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                bool downloadSuccess =
-                    await PrepareExportFile(drawingId);
+                bool downloadSuccess = await PrepareExportFile(drawingId);
 
                 if (!downloadSuccess)
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        message = "下载图纸失败"
-                    });
+                    return JsonSerializer.Serialize(new { success = false, message = "下载图纸失败" });
                 }
 
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
@@ -309,14 +291,16 @@ namespace ZrxDotNetCSProject5
             }
         }
 
-        public async Task<string> StartExportExplode(long drawingId)
+        public async Task<string> StartExportExplode(long drawingId, string token = "")
         {
             try
             {
-                // ==================== 下载DWG ====================
+                httpClient.DefaultRequestHeaders.Authorization = null;
+                if (!string.IsNullOrEmpty(token))
+                    httpClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                bool downloadSuccess =
-                    await PrepareExportFile(drawingId);
+                bool downloadSuccess = await PrepareExportFile(drawingId);
 
                 if (!downloadSuccess)
                 {
@@ -363,228 +347,131 @@ namespace ZrxDotNetCSProject5
                 }
             }
         }
-        private async Task<bool> PrepareExportFile(long drawingId)
+        public async Task<bool> PrepareExportFile(long drawingId)
         {
+            string apiUrl = $"api/drawings/detail?id={drawingId}";
             try
             {
-                // ==================== 获取图纸详情 ====================
+                var response = await httpClient.GetAsync(apiUrl);
 
-                string apiUrl =
-                    $"api/drawings/detail?id={drawingId}";
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    MessageBox.Show(
+                        $"出库文件准备失败：HTTP {response.StatusCode}\n\n" +
+                        $"响应内容: {errorBody?.Substring(0, Math.Min(500, errorBody?.Length ?? 0))}\n\n" +
+                        $"请求URL: {httpClient.BaseAddress}{apiUrl}",
+                        "出库错误详情");
+                    return false;
+                }
 
-                var response =
-                    await httpClient.GetAsync(apiUrl);
+                string json = await response.Content.ReadAsStringAsync();
 
-                response.EnsureSuccessStatusCode();
-
-                string json =
-                    await response.Content.ReadAsStringAsync();
-
-                // ==================== 解析 JSON ====================
-
-                using (JsonDocument doc =
-                       JsonDocument.Parse(json))
+                using (JsonDocument doc = JsonDocument.Parse(json))
                 {
                     var root = doc.RootElement;
 
-                    // 判断业务状态
                     if (root.GetProperty("code").GetInt32() != 200)
-                    {
                         return false;
-                    }
 
-                    // data
                     var data = root.GetProperty("data");
-
-                    // 图纸编号
-                    string code =
-                        data.GetProperty("code").GetString();
-
-                    // DWG路径
-                    string filePath =
-                        data.GetProperty("filePath").GetString();
+                    string code = data.GetProperty("code").GetString();
+                    string filePath = data.GetProperty("filePath").GetString();
 
                     if (string.IsNullOrWhiteSpace(filePath))
-                    {
                         return false;
-                    }
 
-                    // ==================== chuku目录 ====================
+                    string projectDir = Path.GetDirectoryName(
+                        System.Reflection.Assembly.GetExecutingAssembly().Location);
 
-                    string projectDir =
-                        Path.GetDirectoryName(
-                            System.Reflection.Assembly
-                                .GetExecutingAssembly()
-                                .Location
-                        );
-
-                    string chukuDir =
-                        Path.Combine(projectDir, "chuku");
-
-                    // 创建目录
+                    string chukuDir = Path.Combine(projectDir, "chuku");
                     if (!Directory.Exists(chukuDir))
-                    {
                         Directory.CreateDirectory(chukuDir);
-                    }
 
-                    // 清理旧DWG
-                    foreach (var file in Directory.GetFiles(
-                                 chukuDir,
-                                 "*.dwg"))
-                    {
+                    foreach (var file in Directory.GetFiles(chukuDir, "*.dwg"))
                         File.Delete(file);
-                    }
 
-                    // ==================== 本地保存路径 ====================
+                    string localSavePath = Path.Combine(chukuDir, code + ".dwg");
+                    string fullUrl = System.Net.WebUtility.HtmlDecode(filePath);
 
-                    string localSavePath =
-                        Path.Combine(
-                            chukuDir,
-                            code + ".dwg"
-                        );
-
-                    // ==================== 下载地址 ====================
-
-                    string fullUrl =
-                        System.Net.WebUtility.HtmlDecode(filePath);
-
-                    // ==================== 下载文件 ====================
-
-                    await DownloadFileAsync(
-                        fullUrl,
-                        localSavePath
-                    );
-
-                    // ==================== 检查文件 ====================
+                    await DownloadFileAsync(fullUrl, localSavePath);
 
                     return File.Exists(localSavePath);
                 }
             }
-            catch (Exception ex)
+            catch (HttpRequestException ex)
             {
                 MessageBox.Show(
-                    "出库文件准备失败：\n\n" +
-                    ex.Message
-                );
-
+                    $"出库文件准备失败 (HTTP错误)：\n\n{ex.Message}\n\n" +
+                    $"请求URL: {httpClient.BaseAddress}{apiUrl}",
+                    "出库错误详情");
+                return false;
+            }
+            catch (JsonException ex)
+            {
+                MessageBox.Show(
+                    $"出库文件准备失败 (JSON解析错误)：\n\n{ex.Message}\n\n" +
+                    $"请求URL: {httpClient.BaseAddress}{apiUrl}",
+                    "出库错误详情");
                 return false;
             }
         }
-        private async Task<bool> UploadDrawingsToBackend(long typeId)
+        private async Task<(bool success, string message)> UploadDrawingsToBackend(long typeId)
         {
             try
             {
                 string projectDir = Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location
-                );
-
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
                 string outputDir = Path.Combine(projectDir, "ruku");
 
                 if (!Directory.Exists(outputDir))
-                    return false;
-
-                // 获取最新文件
-                var files = new DirectoryInfo(outputDir)
-                    .GetFiles()
-                    .OrderByDescending(f => f.LastWriteTime)
-                    .ToList();
-
-                var dwgFile = files.FirstOrDefault(
-                    f => f.Extension.ToLower() == ".dwg"
-                );
-
-                var pngFile = files.FirstOrDefault(
-                    f => f.Name.EndsWith(".png") &&
-                    !f.Name.Contains("缩略图")
-                );
-
-                var thumbFile = files.FirstOrDefault(
-                    f => f.Name.Contains("缩略图")
-                );
-
-                if (dwgFile == null || pngFile == null || thumbFile == null)
                 {
-                    MessageBox.Show("未找到生成的图纸文件");
-                    return false;
+                    return (false, "ruku目录不存在: " + outputDir);
                 }
 
-                // 获取属性
-                string descProp = await GetDescPropForNode(typeId);
+                var files = new DirectoryInfo(outputDir).GetFiles()
+                    .OrderByDescending(f => f.LastWriteTime).ToList();
 
+                var dwgFile = files.FirstOrDefault(f => f.Extension.ToLower() == ".dwg");
+                var pngFile = files.FirstOrDefault(f => f.Name.EndsWith(".png") && !f.Name.Contains("缩略图"));
+                var thumbFile = files.FirstOrDefault(f => f.Name.Contains("缩略图"));
+
+                if (dwgFile == null)
+                    return (false, "未找到DWG文件");
+                if (pngFile == null)
+                    return (false, "未找到PNG预览图 —— CAD入库命令可能未生成预览图");
+                if (thumbFile == null)
+                    return (false, "未找到缩略图");
+
+                string descProp = await GetDescPropForNode(typeId);
                 if (descProp == null)
-                    return false;
+                    return (false, "获取属性定义失败，typeId=" + typeId);
 
                 using (var content = new MultipartFormDataContent())
                 {
-                    // typeId
-                    content.Add(
-                        new StringContent(typeId.ToString()),
-                        "typeId"
-                    );
+                    content.Add(new StringContent(typeId.ToString()), "typeId");
+                    content.Add(new StreamContent(dwgFile.OpenRead()), "file", dwgFile.Name);
+                    content.Add(new StreamContent(pngFile.OpenRead()), "previewFile", pngFile.Name);
+                    content.Add(new StreamContent(thumbFile.OpenRead()), "thumbFile", thumbFile.Name);
+                    content.Add(new StringContent(descProp, Encoding.UTF8), "descProp");
 
-                    // dwg
-                    var dwgContent = new StreamContent(
-                        dwgFile.OpenRead()
-                    );
+                    var response = await httpClient.PostAsync("api/drawings/create", content);
+                    var resultJson = await response.Content.ReadAsStringAsync();
 
-                    content.Add(
-                        dwgContent,
-                        "file",
-                        dwgFile.Name
-                    );
-
-                    // preview
-                    var previewContent = new StreamContent(
-                        pngFile.OpenRead()
-                    );
-
-                    content.Add(
-                        previewContent,
-                        "previewFile",
-                        pngFile.Name
-                    );
-
-                    // thumb
-                    var thumbContent = new StreamContent(
-                        thumbFile.OpenRead()
-                    );
-
-                    content.Add(
-                        thumbContent,
-                        "thumbFile",
-                        thumbFile.Name
-                    );
-
-                    // 属性
-                    content.Add(
-                        new StringContent(descProp, Encoding.UTF8),
-                        "descProp"
-                    );
-
-                    // 上传
-                    var response = await httpClient.PostAsync(
-                        "api/drawings/create",
-                        content
-                    );
-
-                    var resultJson =
-                        await response.Content.ReadAsStringAsync();
-
-                    using (JsonDocument doc =
-                           JsonDocument.Parse(resultJson))
+                    using (JsonDocument doc = JsonDocument.Parse(resultJson))
                     {
                         var root = doc.RootElement;
-
-                        return root.GetProperty("code")
-                                   .GetInt32() == 200;
+                        var code = root.GetProperty("code").GetInt32();
+                        if (code == 200)
+                            return (true, "入库成功");
+                        var msg = root.TryGetProperty("message", out var m) ? m.GetString() : "未知错误";
+                        return (false, $"API返回code={code}: {msg}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.ToString());
-
-                return false;
+                return (false, ex.Message);
             }
         }
         private async Task<string> GetDescPropForNode(long cabinetId)
@@ -724,4 +611,4 @@ namespace ZrxDotNetCSProject5
             return await tcs.Task;
         }
     }
-}
+    }

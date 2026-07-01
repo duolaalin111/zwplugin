@@ -131,6 +131,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppConfig.cs" />
     <Compile Include="ApiHelper.cs" />
     <Compile Include="Attribute.cs">
       <SubType>Form</SubType>

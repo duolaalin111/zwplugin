@@ -94,20 +94,24 @@ namespace ZrxDotNetCSProject5
 
                     try
                     {
-                        // === 导出 DWG ===
-                        ExportSelectionToDWG(psr.Value, dwgPath, doc);
-
-                        // === 计算包围盒（用于导出PNG）===
+                        // === 先计算包围盒，取中心作为基点 ===
                         Extents3d? ext = GetSelectionExtents(psr.Value, doc);
                         if (!ext.HasValue)
                         {
-                            ed.WriteMessage("\n无法计算选区范围，PNG导出跳过。");
+                            ed.WriteMessage("\n无法计算选区范围，入库取消。");
                             return;
                         }
 
-                        // === 导出两个 PNG（内容完全一样，只是文件名不同）===
-                        ExportExtentsToPng(doc, ext.Value, pngPath);        // 正常图
-                        ExportExtentsToPng(doc, ext.Value, thumbPath);      // 缩略图（同一个范围，同一个内容）
+                        Point3d center = new Point3d(
+                            (ext.Value.MinPoint.X + ext.Value.MaxPoint.X) / 2,
+                            (ext.Value.MinPoint.Y + ext.Value.MaxPoint.Y) / 2, 0);
+
+                        // === 导出 DWG（以选取中心为基点）===
+                        ExportSelectionToDWG(psr.Value, dwgPath, doc, center);
+
+                        // === 导出 PNG ===
+                        ExportExtentsToPng(doc, ext.Value, pngPath);
+                        ExportExtentsToPng(doc, ext.Value, thumbPath);
 
 
                         ed.WriteMessage($"\n入库文件已生成：");
@@ -170,7 +174,6 @@ namespace ZrxDotNetCSProject5
                 }
 
                 // 4. 生成以当前时间命名的文件名
-                // 格式：入库_20260327120000
                 string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
                 string baseFileName = $"入库_{timestamp}";
 
@@ -178,23 +181,25 @@ namespace ZrxDotNetCSProject5
                 string pngPath = Path.Combine(outputDir, $"{baseFileName}.png");
                 string thumbPath = Path.Combine(outputDir, $"{baseFileName}_缩略图.png");
 
-                // 5. 执行导出 (复用你原来的方法)
-                // === 导出 DWG ===
-                ExportSelectionToDWG(psr.Value, dwgPath, doc);
-
-                // === 计算包围盒并导出图片 ===
+                // 计算包围盒，取中心作为WBLOCK基点
                 Extents3d? ext = GetSelectionExtents(psr.Value, doc);
-                if (ext.HasValue)
+                if (!ext.HasValue)
                 {
-                    ExportExtentsToPng(doc, ext.Value, pngPath);       // 预览图
-                    ExportExtentsToPng(doc, ext.Value, thumbPath);     // 缩略图
-                }
-                else
-                {
-                    ed.WriteMessage("\n警告：无法计算选区范围，图片导出失败。");
+                    ed.WriteMessage("\n无法计算选区范围，入库取消。");
+                    return;
                 }
 
-                ed.WriteMessage($"\n[成功] 文件已生成：{baseFileName}");
+                Point3d center = new Point3d((ext.Value.MinPoint.X + ext.Value.MaxPoint.X) / 2,
+                                              (ext.Value.MinPoint.Y + ext.Value.MaxPoint.Y) / 2, 0);
+
+                // 导出 DWG（以选取中心为基点，居中显示）
+                ExportSelectionToDWG(psr.Value, dwgPath, doc, center);
+                ed.WriteMessage($"\n[成功] DWG 已生成：{baseFileName}.dwg");
+
+                // 导出 PNG 预览图和缩略图
+                ExportExtentsToPng(doc, ext.Value, pngPath);
+                ExportExtentsToPng(doc, ext.Value, thumbPath);
+                ed.WriteMessage($"\n[成功] 预览图已生成：{baseFileName}.png");
             }
             catch (System.Exception ex)
             {
@@ -256,8 +261,7 @@ namespace ZrxDotNetCSProject5
             return ext;
         }
 
-        // DWG 导出（上次修复后的干净版本）
-        private void ExportSelectionToDWG(SelectionSet ss, string filePath, Document doc)
+        private void ExportSelectionToDWG(SelectionSet ss, string filePath, Document doc, Point3d basePoint)
         {
             if (ss == null || ss.Count == 0) return;
 
@@ -271,9 +275,13 @@ namespace ZrxDotNetCSProject5
 
                 using (Database newDb = new Database(true, false))
                 {
-                    // 关键调用
-                    db.Wblock(newDb, objIds, Point3d.Origin, DuplicateRecordCloning.Ignore);
-                    newDb.SaveAs(filePath, DwgVersion.Current);
+                    // 以选取中心为基点WBLOCK，确保DWGu查看器中居中显示
+                    db.Wblock(newDb, objIds, basePoint, DuplicateRecordCloning.Ignore);
+
+                    // 设置导出DWG的单位为毫米
+                    newDb.Insunits = UnitsValue.Millimeters;
+
+                    newDb.SaveAs(filePath, DwgVersion.AC1024);   // AutoCAD 2010 格式，兼容 DWG 查看器
                 }
 
                 tr.Commit();
@@ -303,40 +311,46 @@ namespace ZrxDotNetCSProject5
 
                 // 中望CAD 常用 PNG 配置是 "DWG To PNG.pc5"（或 "ZWPLOT-PNG.pc5"，视版本而定）
                 // 如果你的 ZWCAD 安装目录有 "DWG To PNG.pc5"，就用这个；否则用系统自带的虚拟打印机名
-                string plotDeviceName = "ZWPLOT_PNG.pc5";  // 或 "PublishToWeb PNG.pc5" / "Virtual PNG Plotter"
-                string mediaName = null;  // null 表示使用默认纸张，或指定如 "ISO_A4_(210.00_x_297.00_MM)"
+                string plotDeviceName = "ZWPLOT_PNG.pc5";
+                string mediaName = null;
 
                 try
                 {
-                    // 先设置设备名
                     psv.SetPlotConfigurationName(ps, plotDeviceName, mediaName);
-                    psv.RefreshLists(ps);  // 重要！刷新配置列表，避免 eInvalidInput
-
-                    // 设置打印类型为 Window（窗口范围）
-                    psv.SetPlotType(ps, ZwSoft.ZwCAD.DatabaseServices.PlotType.Window);
-
-                    // 设置窗口范围（注意 ZWCAD 用 Extents2d）
-                    psv.SetPlotWindowArea(ps,
-                        new Extents2d(
-                            new Point2d(ext.MinPoint.X, ext.MinPoint.Y),
-                            new Point2d(ext.MaxPoint.X, ext.MaxPoint.Y)));
-
-                    // 比例自适应（Scale to Fit）
-                    psv.SetUseStandardScale(ps, true);
-                    psv.SetStdScaleType(ps, StdScaleType.ScaleToFit);
-
-                    // 居中
-                    psv.SetPlotCentered(ps, true);
-
-                    // 可选：其他设置（如旋转、偏移等）
-                    // psv.SetPlotRotation(ps, PlotRotation.Degrees000);
-                    // psv.SetPlotPaperUnits(ps, PlotPaperUnit.Millimeters);  // 根据需要
+                    psv.RefreshLists(ps);
                 }
-                catch (System.Exception ex)
+                catch
                 {
-                    ed.WriteMessage($"\n设置打印配置失败: {ex.Message}");
-                    return;
+                    // 备用打印机名
+                    try
+                    {
+                        plotDeviceName = "DWG To PNG.pc5";
+                        psv.SetPlotConfigurationName(ps, plotDeviceName, null);
+                        psv.RefreshLists(ps);
+                    }
+                    catch (System.Exception ex2)
+                    {
+                        MessageBox.Show($"PNG打印机配置失败，请检查ZWCAD是否安装了PNG打印机\n\n错误: {ex2.Message}",
+                            "预览图生成失败");
+                        return;
+                    }
                 }
+
+                // 设置打印类型为 Window（窗口范围）
+                psv.SetPlotType(ps, ZwSoft.ZwCAD.DatabaseServices.PlotType.Window);
+
+                // 设置窗口范围
+                psv.SetPlotWindowArea(ps,
+                    new Extents2d(
+                        new Point2d(ext.MinPoint.X, ext.MinPoint.Y),
+                        new Point2d(ext.MaxPoint.X, ext.MaxPoint.Y)));
+
+                // 比例自适应（Scale to Fit）
+                psv.SetUseStandardScale(ps, true);
+                psv.SetStdScaleType(ps, StdScaleType.ScaleToFit);
+
+                // 居中
+                psv.SetPlotCentered(ps, true);
 
                 pi.OverrideSettings = ps;
 
@@ -344,26 +358,36 @@ namespace ZrxDotNetCSProject5
                 piv.MediaMatchingPolicy = MatchingPolicy.MatchEnabled;
                 piv.Validate(pi);
 
-                using (PlotEngine pe = PlotFactory.CreatePublishEngine())
+                try
                 {
-                    using (PlotProgressDialog ppd = new PlotProgressDialog(false, 1, true))
+                    using (PlotEngine pe = PlotFactory.CreatePublishEngine())
                     {
-                        ppd.OnBeginPlot();
-                        ppd.IsVisible = false;
+                        using (PlotProgressDialog ppd = new PlotProgressDialog(false, 1, true))
+                        {
+                            ppd.OnBeginPlot();
+                            ppd.IsVisible = false;
 
-                        pe.BeginPlot(ppd, null);
-                        pe.BeginDocument(pi, doc.Name, null, 1, true, outputPath);  // true 表示后台打印
+                            pe.BeginPlot(ppd, null);
+                            pe.BeginDocument(pi, doc.Name, null, 1, true, outputPath);
 
-                        PlotPageInfo ppi = new PlotPageInfo();
-                        pe.BeginPage(ppi, pi, true, null);
-                        pe.BeginGenerateGraphics(null);
-                        pe.EndGenerateGraphics(null);
-                        pe.EndPage(null);
-                        pe.EndDocument(null);
-                        pe.EndPlot(null);
+                            PlotPageInfo ppi = new PlotPageInfo();
+                            pe.BeginPage(ppi, pi, true, null);
+                            pe.BeginGenerateGraphics(null);
+                            pe.EndGenerateGraphics(null);
+                            pe.EndPage(null);
+                            pe.EndDocument(null);
+                            pe.EndPlot(null);
 
-                        ppd.OnEndPlot();
+                            ppd.OnEndPlot();
+                        }
                     }
+                }
+                catch (System.Exception ex)
+                {
+                    MessageBox.Show($"PNG打印失败：\n\n错误: {ex.Message}\n打印机: {plotDeviceName}",
+                        "预览图生成失败");
+                    tr.Commit();
+                    return;
                 }
 
                 tr.Commit();
@@ -502,10 +526,8 @@ namespace ZrxDotNetCSProject5
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                // 1. 打开当前图的块表
                 BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
 
-                // 2. 生成一个唯一块名（避免重复）
                 string blockName = Path.GetFileNameWithoutExtension(dwgPath);
 
                 if (bt.Has(blockName))
@@ -513,23 +535,20 @@ namespace ZrxDotNetCSProject5
                     blockName = blockName + "_" + DateTime.Now.ToString("HHmmss");
                 }
 
-                // 3. 创建一个临时数据库，读取外部DWG
                 using (Database sourceDb = new Database(false, true))
                 {
                     sourceDb.ReadDwgFile(dwgPath, FileOpenMode.OpenForReadAndAllShare, true, "");
 
-                    // 4. 插入为块定义
+                    // 保持单位统一，不做自动缩放
                     db.Insert(blockName, sourceDb, false);
                 }
 
-                // 5. 在当前空间插入块参照
                 bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+
                 BlockTableRecord space =
                     (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
-                // 【关键修改】：将原来的 Point3d.Origin 替换为用户选择的 position
                 BlockReference br = new BlockReference(position, bt[blockName]);
-
                 space.AppendEntity(br);
                 tr.AddNewlyCreatedDBObject(br, true);
 
@@ -760,9 +779,6 @@ namespace ZrxDotNetCSProject5
         [CommandMethod("LIBWEB")]
         public void LibWebCommand()
         {
-            // ✅ 添加登录验证
-            if (!LoginStateManager.CheckLogin()) return;
-
             LibraryManageWeb libraryManageWeb = new LibraryManageWeb();
             ZwSoft.ZwCAD.ApplicationServices.Application.ShowModelessDialog(libraryManageWeb);
         }

@@ -20,27 +20,17 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
-                // 获取主菜单组（无需 GetActiveObject，因为 Application 是 .NET API 的全局对象）
+                // 获取主菜单组
                 ZcadMenuGroups menuGroups = (ZcadMenuGroups)Application.MenuGroups;
                 ZcadMenuGroup menuGroup = menuGroups.Item("ZWCAD");
 
-                // === 创建主菜单 "SmartDesign" ===
-                ZcadPopupMenu smartDesignMenu = menuGroup.Menus.Add("测试插件");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "登录", "_login\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "图库管理", "_libmgr\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "图库管理网页", "_libweb\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "项目管理", "_projmgr\n");
-                // --- 新加这一行，执行刚才定义的 _projmgr_ui 命令 ---
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "项目管理(新UI)", "_projmgrui\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "项目管理(新UI移植版)", "_qqqprojmgrui\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "非标图纸标准化", "_stdnons\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "生成回路标签", "_genloop\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "设置", "_settings\n");
-                smartDesignMenu.AddMenuItem(smartDesignMenu.Count, "退出登录", "_logout\n");
+                // === 创建菜单 ===
+                ZcadPopupMenu menu = menuGroup.Menus.Add("图库管理");
+                menu.AddMenuItem(menu.Count, "图库管理", "_libweb\n");
 
                 // 插入到菜单栏末尾
                 ZcadMenuBar menuBar = (ZcadMenuBar)Application.MenuBar;
-                smartDesignMenu.InsertInMenuBar(menuBar.Count);
+                menu.InsertInMenuBar(menuBar.Count);
 
          
             }

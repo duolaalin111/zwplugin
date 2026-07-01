@@ -126,9 +126,7 @@ namespace ZrxDotNetCSProject5
             InitializeComponent();
             _syncContext = SynchronizationContext.Current;
             httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri("http://192.168.1.110:8080/");
-            //httpClient.BaseAddress = new Uri("http://10.168.108.191:8080/");
-            //httpClient.BaseAddress = new Uri("https://2ffbb9a7-359f-4409-ae57-ec564f769d7b.mock.pstmn.io/");
+            httpClient.BaseAddress = new Uri(AppConfig.ApiBaseUrl);
             this.Load += LibraryManageAntdUI_Load;
         }
 
