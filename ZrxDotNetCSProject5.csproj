@@ -133,12 +133,7 @@
   <ItemGroup>
     <Compile Include="AppConfig.cs" />
     <Compile Include="ApiHelper.cs" />
-    <Compile Include="Attribute.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Attribute.Designer.cs">
-      <DependentUpon>Attribute.cs</DependentUpon>
-    </Compile>
+    <Compile Include="CadHelper.cs" />
     <Compile Include="DrawingPropertiesEditorForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -169,12 +164,6 @@
     <Compile Include="newmodels\Projectmodel.cs" />
     <Compile Include="ProjectInfo.cs" />
     <Compile Include="Commands.cs" />
-    <Compile Include="CreateNewProduct.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="CreateNewProduct.Designer.cs">
-      <DependentUpon>CreateNewProduct.cs</DependentUpon>
-    </Compile>
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -187,23 +176,9 @@
     <Compile Include="GenerateLoopTags.Designer.cs">
       <DependentUpon>GenerateLoopTags.cs</DependentUpon>
     </Compile>
-    <Compile Include="LibraryManage.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="LibraryManage.Designer.cs">
-      <DependentUpon>LibraryManage.cs</DependentUpon>
-    </Compile>
     <Compile Include="LibraryManageAntdUI.cs" />
     <Compile Include="LibraryManageAntdUI.Designer.cs">
       <DependentUpon>LibraryManageAntdUI.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Login.cs">
-      <SubType>Form</SubType>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Compile>
-    <Compile Include="Login.Designer.cs">
-      <DependentUpon>Login.cs</DependentUpon>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Compile>
     <Compile Include="loginAntdUI.cs">
       <SubType>Form</SubType>
@@ -212,25 +187,7 @@
       <DependentUpon>loginAntdUI.cs</DependentUpon>
     </Compile>
     <Compile Include="LoginStateManager.cs" />
-    <Compile Include="Non-StandardDrawingStandardization.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Non-StandardDrawingStandardization.Designer.cs">
-      <DependentUpon>Non-StandardDrawingStandardization.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Outbound.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Outbound.Designer.cs">
-      <DependentUpon>Outbound.cs</DependentUpon>
-    </Compile>
     <Compile Include="PlugInApplication.cs" />
-    <Compile Include="ProjectEditing.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ProjectEditing.Designer.cs">
-      <DependentUpon>ProjectEditing.cs</DependentUpon>
-    </Compile>
     <Compile Include="ProjectManagement.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -277,12 +234,6 @@
     </COMReference>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Attribute.resx">
-      <DependentUpon>Attribute.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="CreateNewProduct.resx">
-      <DependentUpon>CreateNewProduct.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
@@ -295,30 +246,14 @@
     <EmbeddedResource Include="InputNameForm.resx">
       <DependentUpon>InputNameForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="LibraryManage.resx">
-      <DependentUpon>LibraryManage.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="LibraryManageAntdUI.resx">
       <DependentUpon>LibraryManageAntdUI.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="LibraryManageWeb.resx">
       <DependentUpon>LibraryManageWeb.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Login.resx">
-      <DependentUpon>Login.cs</DependentUpon>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </EmbeddedResource>
     <EmbeddedResource Include="ProjectDetailForm.resx">
       <DependentUpon>ProjectDetailForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Non-StandardDrawingStandardization.resx">
-      <DependentUpon>Non-StandardDrawingStandardization.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Outbound.resx">
-      <DependentUpon>Outbound.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="ProjectEditing.resx">
-      <DependentUpon>ProjectEditing.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="ProjectManagement.resx">
       <DependentUpon>ProjectManagement.cs</DependentUpon>

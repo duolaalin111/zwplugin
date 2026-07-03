@@ -9,32 +9,12 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using AntdUI;
 using System.IO;
-using System.Linq; // 必须包含这一行
+using System.Linq;
 using ZwSoft.ZwCAD.ApplicationServices;
 using System.Threading;
 
 namespace ZrxDotNetCSProject5
 {
-    // 扩展属性数据类（保留原有模拟数据，但改用接口后不再使用）
-    public class DrawingProperties
-    {
-        public string Name { get; set; }
-        public string Library { get; set; }
-        public string Size { get; set; }
-        public string Resolution { get; set; }
-        public string FileSize { get; set; }
-        public string Format { get; set; }
-        public string Version { get; set; }
-        public string Author { get; set; }
-        public string CreateTime { get; set; }
-        public string ModifyTime { get; set; }
-        public string Description { get; set; }
-        public string Tags { get; set; }
-        public string Status { get; set; }
-        public string Checker { get; set; }
-    }
-
-    // 图纸详情类（用于接口返回数据）
     public class DrawingDetail
     {
         public long Id { get; set; }           // 新增：图纸ID，用于编辑提交
@@ -70,8 +50,7 @@ namespace ZrxDotNetCSProject5
 
     public partial class LibraryManageAntdUI : Form
     {
-        private string currentSelectedDrawing = null;
-        private DrawingDetail currentDrawingDetail = null; // 当前选中的图纸详情
+        private DrawingDetail currentDrawingDetail = null;
         private AntdUI.Select productSelect;
         private System.Windows.Forms.FlowLayoutPanel flowPanel;
         private AntdUI.Tree leftTree;
@@ -105,15 +84,9 @@ namespace ZrxDotNetCSProject5
         private LibraryNode currentNode;
         private DrawingSimple[] currentAllDrawings;
         private DrawingSimple[] currentFilteredDrawings;
-        // 在 LibraryManageAntdUI 类中添加一个静态变量
-        public static long LastSelectedTypeId = 0;
-
         // 当前节点的筛选相关数据
         private string currentFirstAttrName = "";
         private List<string> currentValScopeList = new List<string>();
-
-        // 模拟的扩展属性数据（不再使用，但保留以免旧代码报错）
-        private Dictionary<string, DrawingProperties> drawingPropertiesCache = new Dictionary<string, DrawingProperties>();
 
         private HttpClient httpClient;
         private List<ProductGroup> productGroups = new List<ProductGroup>();
@@ -878,12 +851,7 @@ namespace ZrxDotNetCSProject5
                     return;
                 }
 
-                // 2. 执行CAD命令 (注意：SendStringToExecute 是异步执行的，
-                // 如果后续代码需要依赖CAD生成的文件，建议确保CAD命令完成后再继续。
-                // 这里假设命令执行后文件已存在于 ruku 目录)
-                //doc.SendStringToExecute("ZWCAD_入库 ", true, false, false);
-                //await Task.Delay(20000); // 10000 毫秒 = 10 秒
-                //await UploadDrawingsToBackend(selectedTypeId);
+                // 执行CAD命令
                 bool isSuccess = await SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
                 if (isSuccess)
                 {
@@ -1044,10 +1012,7 @@ namespace ZrxDotNetCSProject5
                         if (root.GetProperty("code").GetInt32() == 200)
                         {
                             AntdUI.Message.success(this, "删除成功");
-                            // 清除当前选中的图纸
                             currentDrawingDetail = null;
-                            currentSelectedDrawing = null;
-                            // 清空右侧表格
                             propertyDataTable.Rows.Clear();
                             propertyDataTable.Rows.Add("提示", "请点击图纸查看详情");
                             propertyTable?.Refresh();
@@ -1086,125 +1051,17 @@ namespace ZrxDotNetCSProject5
         //定义监听
         private async Task<bool> SendCommandAndWaitAsync(Document doc, string executeString, string commandName)
         {
-            var tcs = new TaskCompletionSource<bool>();
-
-            // 【修改点】：正确的委托类型是 CommandEventHandler
-            CommandEventHandler endedHandler = null;
-            CommandEventHandler cancelledHandler = null;
-            CommandEventHandler failedHandler = null;
-
-            // 清理事件绑定的局部方法（防止内存泄漏）
-            void CleanupEvents()
-            {
-                doc.CommandEnded -= endedHandler;
-                doc.CommandCancelled -= cancelledHandler;
-                doc.CommandFailed -= failedHandler;
-            }
-
-            // 1. 监听命令正常结束
-            endedHandler = (s, e) =>
-            {
-                if (e.GlobalCommandName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupEvents();
-                    tcs.TrySetResult(true);
-                }
-            };
-
-            // 2. 监听命令被用户取消 (按了 ESC)
-            cancelledHandler = (s, e) =>
-            {
-                if (e.GlobalCommandName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupEvents();
-                    tcs.TrySetResult(false);
-                }
-            };
-
-            // 3. 监听命令执行失败
-            failedHandler = (s, e) =>
-            {
-                if (e.GlobalCommandName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupEvents();
-                    tcs.TrySetResult(false);
-                }
-            };
-
-            // 绑定监听器
-            doc.CommandEnded += endedHandler;
-            doc.CommandCancelled += cancelledHandler;
-            doc.CommandFailed += failedHandler;
-
-            // 发送执行命令
-            doc.SendStringToExecute(executeString, true, false, false);
-
-            // 设置一个兜底的超时机制（比如 60 秒），防止死等
-            var timeoutTask = Task.Delay(60000);
-            var finishedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-
-            if (finishedTask == timeoutTask)
-            {
-                CleanupEvents();
-                throw new Exception("等待 CAD 命令执行超时 (60秒)。");
-            }
-
-            return await tcs.Task;
+            return await CadHelper.SendCommandAndWaitAsync(doc, executeString, commandName);
         }
         //根据节点 ID 获取属性 JSON 字符串
         private async Task<string> GetDescPropForNode(long cabinetId)
         {
             try
             {
-                var response = await httpClient.GetAsync($"api/drawings/simple?cabinetId={cabinetId}");
-                response.EnsureSuccessStatusCode();
-                var json = await response.Content.ReadAsStringAsync();
-                using (JsonDocument doc = JsonDocument.Parse(json))
-                {
-                    var root = doc.RootElement;
-                    if (root.GetProperty("code").GetInt32() != 200)
-                    {
-                        AntdUI.Message.error(this, $"获取属性定义失败：{root.GetProperty("message").GetString()}");
-                        return null;
-                    }
-
-                    // 获取 data 数组
-                    if (root.TryGetProperty("data", out var dataArray) && dataArray.GetArrayLength() > 0)
-                    {
-                        var firstItem = dataArray[0];
-                        if (firstItem.TryGetProperty("attrNames", out var attrNamesElement) &&
-                            attrNamesElement.ValueKind == JsonValueKind.Array)
-                        {
-                            var attrNames = attrNamesElement.EnumerateArray()
-                                .Select(x => x.GetString())
-                                .Where(s => !string.IsNullOrEmpty(s))
-                                .ToList();
-
-                            if (attrNames.Count == 0)
-                            {
-                                AntdUI.Message.warn(this, $"节点 {cabinetId} 没有定义任何属性，将使用空属性上传。");
-                                return "{}";
-                            }
-
-                            var properties = new Dictionary<string, string>();
-                            foreach (var name in attrNames)
-                            {
-                                properties[name] = "";
-                            }
-                            return JsonSerializer.Serialize(properties);
-                        }
-                        else
-                        {
-                            AntdUI.Message.warn(this, $"节点 {cabinetId} 的 data 中缺少 attrNames 字段，将使用空属性上传。");
-                            return "{}";
-                        }
-                    }
-                    else
-                    {
-                        AntdUI.Message.warn(this, $"节点 {cabinetId} 下没有图纸或 data 为空，将使用空属性上传。");
-                        return "{}";
-                    }
-                }
+                var result = await CadHelper.GetDescPropForNode(httpClient, cabinetId);
+                if (result == null)
+                    AntdUI.Message.error(this, $"获取属性定义失败");
+                return result;
             }
             catch (Exception ex)
             {
@@ -1301,122 +1158,10 @@ namespace ZrxDotNetCSProject5
                 AntdUI.Message.error(this, $"网络或系统错误：{ex.Message}");
             }
         }
-        private async Task UploadDrawingsToBackend1(long typeId)
-        {
-            // 【安检门：核心修复代码】
-            // 判断当前如果不在主线程（后台临时工），立刻把整个方法扔回给主 UI 线程执行，然后自己直接 return 下班！
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(async () => await UploadDrawingsToBackend1(typeId)));
-                return;
-            }
-
-            // ========== 下面的代码现在百分之百运行在安全的 UI 主线程中了 ==========
-            try
-            {
-                string projectDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                string outputDir = Path.Combine(projectDir, "ruku");
-
-                if (!Directory.Exists(outputDir)) return;
-
-                // 获取最新的 dwg, png 和 缩略图
-                var files = new DirectoryInfo(outputDir).GetFiles().OrderByDescending(f => f.LastWriteTime).ToList();
-
-                var dwgFile = files.FirstOrDefault(f => f.Extension.ToLower() == ".dwg");
-                var pngFile = files.FirstOrDefault(f => f.Name.EndsWith(".png") && !f.Name.Contains("缩略图"));
-                var thumbFile = files.FirstOrDefault(f => f.Name.Contains("缩略图"));
-
-                if (dwgFile == null || pngFile == null || thumbFile == null)
-                {
-                    AntdUI.Message.error(this, "未找到生成的图纸文件，请重试入库命令。");
-                    return;
-                }
-
-                // 因为前面有了安检门，这里的 AntdUI 绝对安全，不会再在后台线程创建控件了！
-                AntdUI.Message.success(this, "已找到图纸文件");
-                // 动态生成 descProp
-                string descProp = await GetDescPropForNode(typeId);
-                if (descProp == null) return; // 获取失败则终止上传
-
-                using (var content = new MultipartFormDataContent())
-                {
-                    content.Add(new StringContent(typeId.ToString()), "typeId");
-
-                    var dwgContent = new StreamContent(dwgFile.OpenRead());
-                    content.Add(dwgContent, "file", dwgFile.Name);
-
-                    var previewContent = new StreamContent(pngFile.OpenRead());
-                    content.Add(previewContent, "previewFile", pngFile.Name);
-
-                    var thumbContent = new StreamContent(thumbFile.OpenRead());
-                    content.Add(thumbContent, "thumbFile", thumbFile.Name);
-
-                    //string mockDescProp = "{\"进线方式\":\"架空倒进\",\"主开关类型\":\"断路器\",\"断路器连接方式\":\"抽屉式\",\"电源侧电流互感器数量\":\"0\",\"负载侧电流互感器数量\":\"3\",\"电源侧电压互感器数量\":\"0\",\"电源侧 PT 保护选择\":\"无\",\"负载侧电压互感器数量\":\"0\",\"负载侧 PT 保护选择\":\"无\",\"避雷器/浪涌保护器选择\":\"有\",\"浪涌后备保护器/熔断器/微型断路器选择\":\"熔断器\",\"辅助电源回路数量\":\"0\",\"辅助电源塑壳断路器/微型断路器选择\":\"无\",\"辅助电源熔断器选择\":\"无\"}";
-                    //content.Add(new StringContent(mockDescProp, Encoding.UTF8), "descProp");
-                    content.Add(new StringContent(descProp, Encoding.UTF8), "descProp");
-
-                    AntdUI.Message.info(this, "正在上传至服务器...");
-
-                    var response = await httpClient.PostAsync("api/drawings/create", content);
-                    var resultJson = await response.Content.ReadAsStringAsync();
-
-                    using (JsonDocument jdoc = JsonDocument.Parse(resultJson))
-                    {
-                        var root = jdoc.RootElement;
-                        if (root.GetProperty("code").GetInt32() == 200)
-                        {
-                            // 【核心修改点】：不要直接刷新，而是投递给主线程去刷新
-                            // 这样 LoadDrawingsForNode 运行时就是在主线程了，它怎么折腾 UI 都没问题
-                            _syncContext.Post(async _ =>
-                            {
-                                AntdUI.Message.success(this, "入库成功！数据库已同步。");
-
-                                // 因为现在已经身处主线程，调用别人写的方法就不会报“父级控件”错误了
-                                await RefreshCurrentNodeDrawings();
-
-                            }, null);
-                        }
-                        else
-                        {
-                            // 报错弹窗也得回主线程
-                            _syncContext.Post(_ => AntdUI.Message.error(this, $"上传失败：{root.GetProperty("message").GetString()}"), null);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                AntdUI.Message.error(this, $"网络或系统错误：{ex.Message}");
-            }
-        }
-
         private async Task DownloadFileAsync(string url, string localPath)
         {
-            // 如果 URL 是相对路径，自动补全 BaseAddress
-            if (!url.StartsWith("http"))
-            {
-                url = httpClient.BaseAddress + url.TrimStart('/');
-            }
-
-            using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-            {
-                response.EnsureSuccessStatusCode();
-
-                using (var streamToRead = await response.Content.ReadAsStreamAsync())
-                using (var streamToWrite = File.Open(localPath, FileMode.Create))
-                {
-                    await streamToRead.CopyToAsync(streamToWrite);
-                }
-            }
+            await CadHelper.DownloadFileAsync(httpClient, url, localPath);
         }
-        // 保留旧的 UpdatePropertyTable（不再使用）
-        private void UpdatePropertyTable(string drawingName)
-        {
-            propertyDataTable.Rows.Clear();
-            propertyDataTable.Rows.Add("提示", "请点击图纸查看详情");
-            propertyTable?.Refresh();
-        }
-
         private void LeftTree_SelectChanged(object sender, TreeSelectEventArgs e)
         {
             if (e.Item != null)

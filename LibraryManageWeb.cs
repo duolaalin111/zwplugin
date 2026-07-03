@@ -125,10 +125,6 @@ namespace ZrxDotNetCSProject5
     {
         private readonly LibraryManageWeb _parent;
         public WebBridge(LibraryManageWeb parent) { _parent = parent; }
-        private readonly HttpClient httpClient = new HttpClient
-        {
-            BaseAddress = new Uri(AppConfig.ApiBaseUrl)
-        };
         // ... 你小伙伴原来的所有方法保持不变 ...
         public string GetProductGroups()
         { /* 原代码 */
@@ -184,43 +180,6 @@ namespace ZrxDotNetCSProject5
             try { var response = _parent.HttpClient.DeleteAsync($"api/drawings?id={id}").Result; return response.Content.ReadAsStringAsync().Result; }
             catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
         }
-        // ====================== 新增出入库方法 ======================
-
-        // ==================== 新增：入库和出库方法 ====================
-        /*public string StartImport(long typeId)
-        {
-            try
-            {
-                var doc = CadApp.DocumentManager.MdiActiveDocument;
-
-                if (doc == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        message = "未找到CAD文档"
-                    });
-                }
-
-                // 测试命令
-                doc.SendStringToExecute("ZWCAD_入库 ", true, false, false);
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    message = $"入库命令发送成功，typeId={typeId}"
-                });
-            }
-            catch (Exception ex)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    message = ex.ToString()
-                });
-            }
-        }
-        */
         public async Task<string> StartImport(long typeId, string token = "")
         {
             try
@@ -328,24 +287,9 @@ namespace ZrxDotNetCSProject5
                 return JsonSerializer.Serialize(new { success = false, message = ex.Message });
             }
         }
-        private async Task DownloadFileAsync(
-            string fileUrl,
-            string localPath
-)
+        private async Task DownloadFileAsync(string fileUrl, string localPath)
         {
-            using (var response = await httpClient.GetAsync(fileUrl))
-            {
-                response.EnsureSuccessStatusCode();
-
-                using (var fs = new FileStream(
-                    localPath,
-                    FileMode.Create,
-                    FileAccess.Write
-                ))
-                {
-                    await response.Content.CopyToAsync(fs);
-                }
-            }
+            await CadHelper.DownloadFileAsync(httpClient, fileUrl, localPath);
         }
         public async Task<bool> PrepareExportFile(long drawingId)
         {
@@ -478,137 +422,17 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
-                var response = await httpClient.GetAsync(
-                    $"api/drawings/simple?cabinetId={cabinetId}"
-                );
-
-                response.EnsureSuccessStatusCode();
-
-                var json = await response.Content.ReadAsStringAsync();
-
-                using (JsonDocument doc = JsonDocument.Parse(json))
-                {
-                    var root = doc.RootElement;
-
-                    // 接口失败
-                    if (root.GetProperty("code").GetInt32() != 200)
-                    {
-                        return "{}";
-                    }
-
-                    // 获取 data
-                    if (root.TryGetProperty("data", out var dataArray)
-                        && dataArray.GetArrayLength() > 0)
-                    {
-                        var firstItem = dataArray[0];
-
-                        // 获取 attrNames
-                        if (firstItem.TryGetProperty("attrNames", out var attrNamesElement)
-                            && attrNamesElement.ValueKind == JsonValueKind.Array)
-                        {
-                            var attrNames = attrNamesElement
-                                .EnumerateArray()
-                                .Select(x => x.GetString())
-                                .Where(s => !string.IsNullOrEmpty(s))
-                                .ToList();
-
-                            // 没有属性
-                            if (attrNames.Count == 0)
-                            {
-                                return "{}";
-                            }
-
-                            // 生成空属性JSON
-                            var properties = new Dictionary<string, string>();
-
-                            foreach (var name in attrNames)
-                            {
-                                properties[name] = "";
-                            }
-
-                            return JsonSerializer.Serialize(properties);
-                        }
-                    }
-
-                    // 默认空属性
-                    return "{}";
-                }
+                return await CadHelper.GetDescPropForNode(httpClient, cabinetId);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "获取属性定义失败：\n" + ex.Message
-                );
-
+                MessageBox.Show("获取属性定义失败：\n" + ex.Message);
                 return "{}";
             }
         }
         private async Task<bool> SendCommandAndWaitAsync(Document doc, string executeString, string commandName)
         {
-            var tcs = new TaskCompletionSource<bool>();
-
-            // 【修改点】：正确的委托类型是 CommandEventHandler
-            CommandEventHandler endedHandler = null;
-            CommandEventHandler cancelledHandler = null;
-            CommandEventHandler failedHandler = null;
-
-            // 清理事件绑定的局部方法（防止内存泄漏）
-            void CleanupEvents()
-            {
-                doc.CommandEnded -= endedHandler;
-                doc.CommandCancelled -= cancelledHandler;
-                doc.CommandFailed -= failedHandler;
-            }
-
-            // 1. 监听命令正常结束
-            endedHandler = (s, e) =>
-            {
-                if (e.GlobalCommandName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupEvents();
-                    tcs.TrySetResult(true);
-                }
-            };
-
-            // 2. 监听命令被用户取消 (按了 ESC)
-            cancelledHandler = (s, e) =>
-            {
-                if (e.GlobalCommandName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupEvents();
-                    tcs.TrySetResult(false);
-                }
-            };
-
-            // 3. 监听命令执行失败
-            failedHandler = (s, e) =>
-            {
-                if (e.GlobalCommandName.Equals(commandName, StringComparison.OrdinalIgnoreCase))
-                {
-                    CleanupEvents();
-                    tcs.TrySetResult(false);
-                }
-            };
-
-            // 绑定监听器
-            doc.CommandEnded += endedHandler;
-            doc.CommandCancelled += cancelledHandler;
-            doc.CommandFailed += failedHandler;
-
-            // 发送执行命令
-            doc.SendStringToExecute(executeString, true, false, false);
-
-            // 设置一个兜底的超时机制（比如 60 秒），防止死等
-            var timeoutTask = Task.Delay(60000);
-            var finishedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-
-            if (finishedTask == timeoutTask)
-            {
-                CleanupEvents();
-                throw new Exception("等待 CAD 命令执行超时 (60秒)。");
-            }
-
-            return await tcs.Task;
+            return await CadHelper.SendCommandAndWaitAsync(doc, executeString, commandName);
         }
     }
     }

@@ -7,7 +7,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static ZrxDotNetCSProject5.Form1try;
 using ZrxDotNetCSProject5.newModels;
 namespace ZrxDotNetCSProject5
 {

@@ -217,17 +217,6 @@ namespace ZrxDotNetCSProject5
             }
             return name.Trim();
         }
-        private static void ExportToPNGWithPlot(SelectionSet ss, string pngPath, Document doc)
-        {
-            // 使用 PlotSettings + Plot 导出 PNG（ZWCAD 支持类似 AutoCAD 的 Plot API）
-            // 或者最简单：调用 PNGOUT + 预选
-            doc.Editor.WriteMessage("\n正在导出 PNG...");
-
-            // 推荐直接 SendCommand（PNGOUT 支持选中对象）
-            string cmd = $"_PNGOUT\n{pngPath}\n";
-            doc.SendStringToExecute(cmd, true, false, false);
-            // 用户会看到选择对象提示，此时可以再 SendStringToExecute("P\n") 或提前用 PickFirst
-        }
         // 计算选中对象的包围盒（从你原来的代码提取出来）
         private Extents3d? GetSelectionExtents(SelectionSet ss, Document doc)
         {
@@ -656,55 +645,6 @@ namespace ZrxDotNetCSProject5
 
             ed.WriteMessage("\nHello World!");
         }
-        //    [CommandMethod("LOGIN")]
-        //    public void LoginCommand()
-        //    {
-        //        //Login login = new Login();
-        //        loginAntdUI login= new loginAntdUI();
-        //        Application.ShowModelessDialog(login);
-        //    }
-
-        //    [CommandMethod("LIBMGR")]
-        //    public void LibraryManagementCommand()
-        //    {
-        //        //LibraryManage libraryManage = new LibraryManage();
-        //        LibraryManageAntdUI libraryManage = new LibraryManageAntdUI();
-        //        Application.ShowModelessDialog(libraryManage);
-        //    }
-
-        //    [CommandMethod("PROJMGR")]
-        //    public void ProjectManagementCommand()
-        //    {
-        //        ProjectManagement projectManagement = new ProjectManagement();
-        //        Application.ShowModelessDialog(projectManagement);
-        //    }
-
-        //    [CommandMethod("STDNONS")]
-        //    public void NonStandardDrawingStandardizationCommand()
-        //    {
-        //        Form1 form1 = new Form1();
-        //        Application.ShowModelessDialog(form1);
-        //    }
-
-        //    [CommandMethod("GENLOOP")]
-        //    public void GenerateLoopTagsCommand()
-        //    {
-        //        GenerateLoopTags generateLoopTags = new GenerateLoopTags();
-        //        Application.ShowModelessDialog(generateLoopTags);
-        //    }
-
-        //    [CommandMethod("SETTINGS")]
-        //    public void SettingsCommand()
-        //    {
-        //        Settings settings = new Settings();
-        //        Application.ShowModelessDialog(settings);
-        //    }
-
-        //    [CommandMethod("LOGOUT")]
-        //    public void LogoutCommand()
-        //    {
-        //        Application.ShowAlertDialog("Logout clicked!");
-        //    }
         [CommandMethod("LOGIN")]
         public void LoginCommand()
         {
