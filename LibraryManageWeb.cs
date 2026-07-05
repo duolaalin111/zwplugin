@@ -180,7 +180,7 @@ namespace ZrxDotNetCSProject5
             try { var response = _parent.HttpClient.DeleteAsync($"api/drawings?id={id}").Result; return response.Content.ReadAsStringAsync().Result; }
             catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
         }
-        public async Task<string> StartImport(long typeId, string token = "")
+        public async Task<string> StartImport(long typeId, string token = "", string descProp = "")
         {
             try
             {
@@ -192,17 +192,13 @@ namespace ZrxDotNetCSProject5
                 if (doc == null)
                     return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
 
-                System.Diagnostics.Debug.WriteLine($"[入库] 开始执行入库命令, typeId={typeId}");
-
                 // 1. 运行CAD入库命令，生成 DWG + PNG 文件
                 bool isSuccess = await SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
-                System.Diagnostics.Debug.WriteLine($"[入库] CAD命令完成, isSuccess={isSuccess}");
                 if (!isSuccess)
                     return JsonSerializer.Serialize(new { success = false, message = "入库命令失败" });
 
                 // 2. 上传生成的文件到后端API
-                var (uploadSuccess, uploadMsg) = await UploadDrawingsToBackend(typeId);
-                System.Diagnostics.Debug.WriteLine($"[入库] 上传结果: {uploadSuccess}, {uploadMsg}");
+                var (uploadSuccess, uploadMsg) = await UploadDrawingsToBackend(typeId, descProp);
 
                 return JsonSerializer.Serialize(new
                 {
@@ -212,7 +208,6 @@ namespace ZrxDotNetCSProject5
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[入库] 异常: {ex.Message}\n{ex.StackTrace}");
                 return JsonSerializer.Serialize(new { success = false, message = ex.Message });
             }
         }
@@ -360,7 +355,7 @@ namespace ZrxDotNetCSProject5
                 return false;
             }
         }
-        private async Task<(bool success, string message)> UploadDrawingsToBackend(long typeId)
+        private async Task<(bool success, string message)> UploadDrawingsToBackend(long typeId, string customDescProp = "")
         {
             try
             {
@@ -387,7 +382,9 @@ namespace ZrxDotNetCSProject5
                 if (thumbFile == null)
                     return (false, "未找到缩略图");
 
-                string descProp = await GetDescPropForNode(typeId);
+                string descProp = !string.IsNullOrEmpty(customDescProp)
+                    ? customDescProp
+                    : await GetDescPropForNode(typeId);
                 if (descProp == null)
                     return (false, "获取属性定义失败，typeId=" + typeId);
 
