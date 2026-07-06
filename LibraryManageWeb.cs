@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -8,13 +8,9 @@ using System.Windows.Forms;
 using CefSharp;
 using CefSharp.WinForms;
 using System.Collections.Generic;
-using System.Data;
-using System.Drawing;
+using System.Linq;
 using AntdUI;
-using System.Linq; // 必须包含这一行
 using ZwSoft.ZwCAD.ApplicationServices;
-using System.Threading;
-// 关键：使用别名解决 Application 冲突
 using CadApp = ZwSoft.ZwCAD.ApplicationServices.Application;
 
 namespace ZrxDotNetCSProject5
@@ -25,8 +21,14 @@ namespace ZrxDotNetCSProject5
         private HttpClient httpClient;
         private string apiBaseUrl = AppConfig.ApiBaseUrl;
         private string frontendUrl = AppConfig.FrontendUrl;
-        // 添加这个属性，让 WebBridge 可以访问 httpClient
+        // ����������ԣ��� WebBridge ���Է��� httpClient
         public HttpClient HttpClient => httpClient;
+
+        public void RefreshBrowser()
+        {
+            if (browser != null && browser.IsBrowserInitialized)
+                browser.ExecuteScriptAsync("location.reload()");
+        }
 
         public LibraryManageWeb()
         {
@@ -67,7 +69,7 @@ namespace ZrxDotNetCSProject5
                 Dock = DockStyle.Fill
             };
 
-            // ==================== 关键：注册 C# Bridge ====================
+            // ==================== �ؼ���ע�� C# Bridge ====================
             browser.JavascriptObjectRepository.Settings.LegacyBindingEnabled = true;
 
             browser.JavascriptObjectRepository.Register(
@@ -87,21 +89,19 @@ namespace ZrxDotNetCSProject5
                 {
                     this.Invoke(new Action(() =>
                     {
-                        browser.ShowDevTools();
-
-                        //MessageBox.Show("CEF Bridge 注册成功！");
+                        //browser.ShowDevTools();
                     }));
                 }
             };
 
             browser.LoadError += (s, e) =>
             {
-                MessageBox.Show($"加载前端失败：{e.ErrorText}", "错误");
+                MessageBox.Show($"����ǰ��ʧ�ܣ�{e.ErrorText}", "����");
             };
         }
 
 
-        public async void SaveDrawingDetail(DrawingDetail detail)
+        public async Task SaveDrawingDetail(DrawingDetail detail)
         {
             try
             {
@@ -125,46 +125,65 @@ namespace ZrxDotNetCSProject5
     {
         private readonly LibraryManageWeb _parent;
         public WebBridge(LibraryManageWeb parent) { _parent = parent; }
-        // ... 你小伙伴原来的所有方法保持不变 ...
-        public string GetProductGroups()
-        { /* 原代码 */
-            try { var response = _parent.HttpClient.GetAsync("api/model-groups").Result; return response.Content.ReadAsStringAsync().Result; }
-            catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
+
+        private static string ErrorJson(string message) =>
+            JsonSerializer.Serialize(new { code = 500, message });
+
+        public async Task<string> GetProductGroups()
+        {
+            try
+            {
+                var response = await _parent.HttpClient.GetAsync("api/model-groups");
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex) { return ErrorJson(ex.Message); }
         }
 
-        public string GetTreeData(int productId)
-        { /* 原代码 */
-            try { var response = _parent.HttpClient.GetAsync($"api/product-schemes?productId={productId}").Result; return response.Content.ReadAsStringAsync().Result; }
-            catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
+        public async Task<string> GetTreeData(int productId)
+        {
+            try
+            {
+                var response = await _parent.HttpClient.GetAsync($"api/product-schemes?productId={productId}");
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex) { return ErrorJson(ex.Message); }
         }
 
-        public string GetDrawings(long cabinetId)
-        { /* 原代码 */
-            try { var response = _parent.HttpClient.GetAsync($"api/drawings/simple?cabinetId={cabinetId}").Result; return response.Content.ReadAsStringAsync().Result; }
-            catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
+        public async Task<string> GetDrawings(long cabinetId)
+        {
+            try
+            {
+                var response = await _parent.HttpClient.GetAsync($"api/drawings/simple?cabinetId={cabinetId}");
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex) { return ErrorJson(ex.Message); }
         }
 
-        public string FilterDrawings(long cabinetId, string valScope)
-        { /* 原代码 */
+        public async Task<string> FilterDrawings(long cabinetId, string valScope)
+        {
             try
             {
                 var requestBody = new { cabinetId, valScope };
                 var json = JsonSerializer.Serialize(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = _parent.HttpClient.PostAsync("api/drawings/filter", content).Result;
-                return response.Content.ReadAsStringAsync().Result;
+                var response = await _parent.HttpClient.PostAsync("api/drawings/filter", content);
+                return await response.Content.ReadAsStringAsync();
             }
-            catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
+            catch (Exception ex) { return ErrorJson(ex.Message); }
         }
 
-        public string GetDrawingDetail(long drawingId)
-        { /* 原代码 */
-            try { var response = _parent.HttpClient.GetAsync($"api/drawings/detail?id={drawingId}").Result; return response.Content.ReadAsStringAsync().Result; }
-            catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
+        public async Task<string> GetDrawingDetail(long drawingId)
+        {
+            try
+            {
+                var response = await _parent.HttpClient.GetAsync($"api/drawings/detail?id={drawingId}");
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex) { return ErrorJson(ex.Message); }
         }
 
         public void EditDrawing(string detailJson)
-        { /* 原代码 */
+        {
             _parent.Invoke(new Action(() => {
                 var detail = JsonSerializer.Deserialize<DrawingDetail>(detailJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 var editForm = new DrawingPropertiesEditorForm(detail);
@@ -175,34 +194,64 @@ namespace ZrxDotNetCSProject5
             }));
         }
 
-        public string DeleteDrawing(long id)
-        { /* 原代码 */
-            try { var response = _parent.HttpClient.DeleteAsync($"api/drawings?id={id}").Result; return response.Content.ReadAsStringAsync().Result; }
-            catch (Exception ex) { return $"{{\"code\":500, \"message\":\"{ex.Message}\"}}"; }
+        public void OpenDrawingDetail(long drawingId)
+        {
+            _parent.BeginInvoke(new Action(() => {
+                try
+                {
+                    var dlg = new DrawingDetailDialog(drawingId, _parent.HttpClient,
+                        exportAction: async (id) => {
+                            var result = await StartExport(id);
+                            JsonDocument data = JsonDocument.Parse(result);
+                            bool ok = data.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
+                            data.Dispose();
+                            return ok;
+                        },
+                        exportExplodeAction: async (id) => {
+                            var result = await StartExportExplode(id);
+                            JsonDocument data = JsonDocument.Parse(result);
+                            bool ok = data.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
+                            data.Dispose();
+                            return ok;
+                        });
+                    dlg.StartPosition = FormStartPosition.CenterParent;
+                    dlg.ShowDialog(_parent);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("��ͼֽ����ʧ��: " + ex.Message);
+                }
+            }));
+        }
+
+        public async Task<string> DeleteDrawing(long id)
+        {
+            try
+            {
+                var response = await _parent.HttpClient.DeleteAsync($"api/drawings?id={id}");
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex) { return ErrorJson(ex.Message); }
         }
         public async Task<string> StartImport(long typeId, string token = "", string descProp = "")
         {
             try
             {
-                if (!string.IsNullOrEmpty(token))
-                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
-                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
+                    return JsonSerializer.Serialize(new { success = false, message = "δ�ҵ�CAD�ĵ�" });
 
-                // 1. 运行CAD入库命令，生成 DWG + PNG 文件
-                bool isSuccess = await _parent.SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
+                // 1. ����CAD���������� DWG + PNG �ļ�
+                bool isSuccess = await _parent.SendCommandAndWaitAsync(doc, "ZWCAD_��� ", "ZWCAD_���");
                 if (!isSuccess)
-                    return JsonSerializer.Serialize(new { success = false, message = "入库命令失败" });
+                    return JsonSerializer.Serialize(new { success = false, message = "�������ʧ��" });
 
                 var (uploadSuccess, uploadMsg) = await _parent.UploadDrawingsToBackend(typeId, descProp);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = uploadSuccess,
-                    message = uploadSuccess ? "入库成功" : uploadMsg
+                    message = uploadSuccess ? "���ɹ�" : uploadMsg
                 });
             }
             catch (Exception ex)
@@ -214,28 +263,23 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
-                _parent.HttpClient.DefaultRequestHeaders.Authorization = null;
-                if (!string.IsNullOrEmpty(token))
-                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
                 bool downloadSuccess = await _parent.PrepareExportFile(drawingId);
 
                 if (!downloadSuccess)
                 {
-                    return JsonSerializer.Serialize(new { success = false, message = "下载图纸失败" });
+                    return JsonSerializer.Serialize(new { success = false, message = "����ͼֽʧ��" });
                 }
 
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
-                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
+                    return JsonSerializer.Serialize(new { success = false, message = "δ�ҵ�CAD�ĵ�" });
 
-                doc.SendStringToExecute("ZWCAD_出库1 ", true, false, false);
+                doc.SendStringToExecute("ZWCAD_����1 ", true, false, false);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = "出库命令已发送，请在CAD中选择插入点"
+                    message = "���������ѷ��ͣ�����CAD��ѡ������"
                 });
             }
             catch (Exception ex)
@@ -248,11 +292,6 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
-                _parent.HttpClient.DefaultRequestHeaders.Authorization = null;
-                if (!string.IsNullOrEmpty(token))
-                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
                 bool downloadSuccess = await _parent.PrepareExportFile(drawingId);
 
                 if (!downloadSuccess)
@@ -260,20 +299,20 @@ namespace ZrxDotNetCSProject5
                     return JsonSerializer.Serialize(new
                     {
                         success = false,
-                        message = "下载图纸失败"
+                        message = "����ͼֽʧ��"
                     });
                 }
 
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
-                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
+                    return JsonSerializer.Serialize(new { success = false, message = "δ�ҵ�CAD�ĵ�" });
 
-                doc.SendStringToExecute("ZWCAD_出库1_Explode ", true, false, false);
+                doc.SendStringToExecute("ZWCAD_����1_Explode ", true, false, false);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = "炸开出库命令已发送，请在CAD中选择插入点"
+                    message = "ը�����������ѷ��ͣ�����CAD��ѡ������"
                 });
             }
             catch (Exception ex)
@@ -299,10 +338,10 @@ namespace ZrxDotNetCSProject5
                 {
                     var errorBody = await response.Content.ReadAsStringAsync();
                     MessageBox.Show(
-                        $"出库文件准备失败：HTTP {response.StatusCode}\n\n" +
-                        $"响应内容: {errorBody?.Substring(0, Math.Min(500, errorBody?.Length ?? 0))}\n\n" +
-                        $"请求URL: {httpClient.BaseAddress}{apiUrl}",
-                        "出库错误详情");
+                        $"�����ļ�׼��ʧ�ܣ�HTTP {response.StatusCode}\n\n" +
+                        $"��Ӧ����: {errorBody?.Substring(0, Math.Min(500, errorBody?.Length ?? 0))}\n\n" +
+                        $"����URL: {httpClient.BaseAddress}{apiUrl}",
+                        "�����������");
                     return false;
                 }
 
@@ -343,17 +382,17 @@ namespace ZrxDotNetCSProject5
             catch (HttpRequestException ex)
             {
                 MessageBox.Show(
-                    $"出库文件准备失败 (HTTP错误)：\n\n{ex.Message}\n\n" +
-                    $"请求URL: {httpClient.BaseAddress}{apiUrl}",
-                    "出库错误详情");
+                    $"�����ļ�׼��ʧ�� (HTTP����)��\n\n{ex.Message}\n\n" +
+                    $"����URL: {httpClient.BaseAddress}{apiUrl}",
+                    "�����������");
                 return false;
             }
             catch (JsonException ex)
             {
                 MessageBox.Show(
-                    $"出库文件准备失败 (JSON解析错误)：\n\n{ex.Message}\n\n" +
-                    $"请求URL: {httpClient.BaseAddress}{apiUrl}",
-                    "出库错误详情");
+                    $"�����ļ�׼��ʧ�� (JSON��������)��\n\n{ex.Message}\n\n" +
+                    $"����URL: {httpClient.BaseAddress}{apiUrl}",
+                    "�����������");
                 return false;
             }
         }
@@ -367,28 +406,28 @@ namespace ZrxDotNetCSProject5
 
                 if (!Directory.Exists(outputDir))
                 {
-                    return (false, "ruku目录不存在: " + outputDir);
+                    return (false, "rukuĿ¼������: " + outputDir);
                 }
 
                 var files = new DirectoryInfo(outputDir).GetFiles()
                     .OrderByDescending(f => f.LastWriteTime).ToList();
 
                 var dwgFile = files.FirstOrDefault(f => f.Extension.ToLower() == ".dwg");
-                var pngFile = files.FirstOrDefault(f => f.Name.EndsWith(".png") && !f.Name.Contains("缩略图"));
-                var thumbFile = files.FirstOrDefault(f => f.Name.Contains("缩略图"));
+                var pngFile = files.FirstOrDefault(f => f.Name.EndsWith(".png") && !f.Name.Contains("����ͼ"));
+                var thumbFile = files.FirstOrDefault(f => f.Name.Contains("����ͼ"));
 
                 if (dwgFile == null)
-                    return (false, "未找到DWG文件");
+                    return (false, "δ�ҵ�DWG�ļ�");
                 if (pngFile == null)
-                    return (false, "未找到PNG预览图 —— CAD入库命令可能未生成预览图");
+                    return (false, "δ�ҵ�PNGԤ��ͼ ���� CAD����������δ����Ԥ��ͼ");
                 if (thumbFile == null)
-                    return (false, "未找到缩略图");
+                    return (false, "δ�ҵ�����ͼ");
 
                 string descProp = !string.IsNullOrEmpty(customDescProp)
                     ? customDescProp
                     : await GetDescPropForNode(typeId);
                 if (descProp == null)
-                    return (false, "获取属性定义失败，typeId=" + typeId);
+                    return (false, "��ȡ���Զ���ʧ�ܣ�typeId=" + typeId);
 
                 using (var content = new MultipartFormDataContent())
                 {
@@ -406,9 +445,9 @@ namespace ZrxDotNetCSProject5
                         var root = doc.RootElement;
                         var code = root.GetProperty("code").GetInt32();
                         if (code == 200)
-                            return (true, "入库成功");
-                        var msg = root.TryGetProperty("message", out var m) ? m.GetString() : "未知错误";
-                        return (false, $"API返回code={code}: {msg}");
+                            return (true, "���ɹ�");
+                        var msg = root.TryGetProperty("message", out var m) ? m.GetString() : "δ֪����";
+                        return (false, $"API����code={code}: {msg}");
                     }
                 }
             }
@@ -425,7 +464,7 @@ namespace ZrxDotNetCSProject5
             }
             catch (Exception ex)
             {
-                MessageBox.Show("获取属性定义失败：\n" + ex.Message);
+                MessageBox.Show("��ȡ���Զ���ʧ�ܣ�\n" + ex.Message);
                 return "{}";
             }
         }

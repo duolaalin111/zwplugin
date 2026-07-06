@@ -149,6 +149,12 @@
     <Compile Include="InputNameForm.Designer.cs">
       <DependentUpon>InputNameForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="DrawingDetailDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="DrawingDetailDialog.Designer.cs">
+      <DependentUpon>DrawingDetailDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="LibraryManageWeb.cs">
       <SubType>Form</SubType>
     </Compile>

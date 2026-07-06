@@ -434,7 +434,7 @@ namespace ZrxDotNetCSProject5
                     }
                 }
             }
-            catch
+            catch (Exception)
             {
                 pictureBox.Invoke(new Action(() =>
                 {
@@ -855,9 +855,6 @@ namespace ZrxDotNetCSProject5
                 bool isSuccess = await SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
                 if (isSuccess)
                 {
-                    AntdUI.Message.success(this, "要上传了");
-                    // 监听器返回 true，说明命令在 CAD 里彻底跑完了！
-                    // 此时图纸必然已经生成，安全地执行你的上传方法：
                     await UploadDrawingsToBackend(selectedTypeId);
                 }
                 else
@@ -1122,7 +1119,6 @@ namespace ZrxDotNetCSProject5
                         // 【关键修复】：判断当前是否在后台线程，如果是，强制切回主 UI 线程执行界面刷新
                         if (this.InvokeRequired)
                         {
-                            AntdUI.Message.success(this, "在后台。");
                             this.Invoke(new Action(async () =>
                             {
                                 if (root.GetProperty("code").GetInt32() == 200)
@@ -1138,10 +1134,8 @@ namespace ZrxDotNetCSProject5
                         }
                         else
                         {
-                            // 如果已经在主线程，直接执行
                             if (root.GetProperty("code").GetInt32() == 200)
                             {
-                                AntdUI.Message.success(this, "本身在主线程。");
                                 AntdUI.Message.success(this, "入库成功！数据库已同步。");
                                 await RefreshCurrentNodeDrawings();
                             }

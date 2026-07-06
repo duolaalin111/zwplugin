@@ -1,18 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
+using System.Windows.Forms;
 using ZwSoft.ZwCAD.Runtime;
 using ZwSoft.ZwCAD.ApplicationServices;
 using ZwSoft.ZwCAD.Geometry;
 using ZwSoft.ZwCAD.DatabaseServices;
 using ZwSoft.ZwCAD.EditorInput;
-using System.IO;
 using ZwSoft.ZwCAD.PlottingServices;
-using PlotType = ZwSoft.ZwCAD.DatabaseServices.PlotType; // CommandMethod, CommandClass
-using ZwSoft.ZwCAD.Colors;
-using System.Windows.Forms;
 [assembly: CommandClass(typeof(ZrxDotNetCSProject5.Commands))]
 
 namespace ZrxDotNetCSProject5
