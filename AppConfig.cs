@@ -2,7 +2,7 @@ namespace ZrxDotNetCSProject5
 {
     public static class AppConfig
     {
-        public const string ApiBaseUrl = "http://192.168.1.102:8080/";
+        public const string ApiBaseUrl = "http://192.168.1.100:8080/";
 
         public const string FrontendUrl = "http://localhost:5173/";
 

@@ -185,7 +185,7 @@ namespace ZrxDotNetCSProject5
             try
             {
                 if (!string.IsNullOrEmpty(token))
-                    httpClient.DefaultRequestHeaders.Authorization =
+                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
@@ -193,12 +193,11 @@ namespace ZrxDotNetCSProject5
                     return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
 
                 // 1. 运行CAD入库命令，生成 DWG + PNG 文件
-                bool isSuccess = await SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
+                bool isSuccess = await _parent.SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
                 if (!isSuccess)
                     return JsonSerializer.Serialize(new { success = false, message = "入库命令失败" });
 
-                // 2. 上传生成的文件到后端API
-                var (uploadSuccess, uploadMsg) = await UploadDrawingsToBackend(typeId, descProp);
+                var (uploadSuccess, uploadMsg) = await _parent.UploadDrawingsToBackend(typeId, descProp);
 
                 return JsonSerializer.Serialize(new
                 {
@@ -215,12 +214,12 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
-                httpClient.DefaultRequestHeaders.Authorization = null;
+                _parent.HttpClient.DefaultRequestHeaders.Authorization = null;
                 if (!string.IsNullOrEmpty(token))
-                    httpClient.DefaultRequestHeaders.Authorization =
+                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                bool downloadSuccess = await PrepareExportFile(drawingId);
+                bool downloadSuccess = await _parent.PrepareExportFile(drawingId);
 
                 if (!downloadSuccess)
                 {
@@ -249,12 +248,12 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
-                httpClient.DefaultRequestHeaders.Authorization = null;
+                _parent.HttpClient.DefaultRequestHeaders.Authorization = null;
                 if (!string.IsNullOrEmpty(token))
-                    httpClient.DefaultRequestHeaders.Authorization =
+                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                bool downloadSuccess = await PrepareExportFile(drawingId);
+                bool downloadSuccess = await _parent.PrepareExportFile(drawingId);
 
                 if (!downloadSuccess)
                 {
@@ -282,6 +281,9 @@ namespace ZrxDotNetCSProject5
                 return JsonSerializer.Serialize(new { success = false, message = ex.Message });
             }
         }
+    }
+    public partial class LibraryManageWeb
+    {
         private async Task DownloadFileAsync(string fileUrl, string localPath)
         {
             await CadHelper.DownloadFileAsync(httpClient, fileUrl, localPath);
@@ -355,7 +357,7 @@ namespace ZrxDotNetCSProject5
                 return false;
             }
         }
-        private async Task<(bool success, string message)> UploadDrawingsToBackend(long typeId, string customDescProp = "")
+        internal async Task<(bool success, string message)> UploadDrawingsToBackend(long typeId, string customDescProp = "")
         {
             try
             {
@@ -427,7 +429,7 @@ namespace ZrxDotNetCSProject5
                 return "{}";
             }
         }
-        private async Task<bool> SendCommandAndWaitAsync(Document doc, string executeString, string commandName)
+        internal async Task<bool> SendCommandAndWaitAsync(Document doc, string executeString, string commandName)
         {
             return await CadHelper.SendCommandAndWaitAsync(doc, executeString, commandName);
         }
