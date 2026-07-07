@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -21,7 +21,6 @@ namespace ZrxDotNetCSProject5
         private HttpClient httpClient;
         private string apiBaseUrl = AppConfig.ApiBaseUrl;
         private string frontendUrl = AppConfig.FrontendUrl;
-        // ����������ԣ��� WebBridge ���Է��� httpClient
         public HttpClient HttpClient => httpClient;
 
         public void RefreshBrowser()
@@ -50,17 +49,10 @@ namespace ZrxDotNetCSProject5
             if (!Cef.IsInitialized)
             {
                 var settings = new CefSettings();
-
-                settings.CachePath = Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    "CefCache"
-                );
-
+                settings.CachePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CefCache");
                 settings.CefCommandLineArgs.Add("disable-web-security", "1");
                 settings.CefCommandLineArgs.Add("allow-file-access-from-files", "1");
-
                 CefSharpSettings.ConcurrentTaskExecution = true;
-
                 Cef.Initialize(settings);
             }
 
@@ -69,17 +61,13 @@ namespace ZrxDotNetCSProject5
                 Dock = DockStyle.Fill
             };
 
-            // ==================== �ؼ���ע�� C# Bridge ====================
             browser.JavascriptObjectRepository.Settings.LegacyBindingEnabled = true;
-
             browser.JavascriptObjectRepository.Register(
                 "bound",
                 new WebBridge(this),
                 isAsync: true,
                 options: BindingOptions.DefaultBinder
             );
-
-            // ============================================================
 
             this.Controls.Add(browser);
 
@@ -96,10 +84,9 @@ namespace ZrxDotNetCSProject5
 
             browser.LoadError += (s, e) =>
             {
-                MessageBox.Show($"����ǰ��ʧ�ܣ�{e.ErrorText}", "����");
+                MessageBox.Show($"加载前端失败：{e.ErrorText}", "错误");
             };
         }
-
 
         public async Task SaveDrawingDetail(DrawingDetail detail)
         {
@@ -120,7 +107,7 @@ namespace ZrxDotNetCSProject5
             }
         }
     }
-    // ====================== WebBridge ======================
+
     public class WebBridge
     {
         private readonly LibraryManageWeb _parent;
@@ -219,7 +206,7 @@ namespace ZrxDotNetCSProject5
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("��ͼֽ����ʧ��: " + ex.Message);
+                    MessageBox.Show("打开图纸详情失败: " + ex.Message);
                 }
             }));
         }
@@ -233,25 +220,25 @@ namespace ZrxDotNetCSProject5
             }
             catch (Exception ex) { return ErrorJson(ex.Message); }
         }
+
         public async Task<string> StartImport(long typeId, string token = "", string descProp = "")
         {
             try
             {
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
-                    return JsonSerializer.Serialize(new { success = false, message = "δ�ҵ�CAD�ĵ�" });
+                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
 
-                // 1. ����CAD���������� DWG + PNG �ļ�
-                bool isSuccess = await _parent.SendCommandAndWaitAsync(doc, "ZWCAD_��� ", "ZWCAD_���");
+                bool isSuccess = await _parent.SendCommandAndWaitAsync(doc, "ZWCAD_入库 ", "ZWCAD_入库");
                 if (!isSuccess)
-                    return JsonSerializer.Serialize(new { success = false, message = "�������ʧ��" });
+                    return JsonSerializer.Serialize(new { success = false, message = "入库命令失败" });
 
                 var (uploadSuccess, uploadMsg) = await _parent.UploadDrawingsToBackend(typeId, descProp);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = uploadSuccess,
-                    message = uploadSuccess ? "���ɹ�" : uploadMsg
+                    message = uploadSuccess ? "入库成功" : uploadMsg
                 });
             }
             catch (Exception ex)
@@ -259,6 +246,7 @@ namespace ZrxDotNetCSProject5
                 return JsonSerializer.Serialize(new { success = false, message = ex.Message });
             }
         }
+
         public async Task<string> StartExport(long drawingId, string token = "")
         {
             try
@@ -267,19 +255,19 @@ namespace ZrxDotNetCSProject5
 
                 if (!downloadSuccess)
                 {
-                    return JsonSerializer.Serialize(new { success = false, message = "����ͼֽʧ��" });
+                    return JsonSerializer.Serialize(new { success = false, message = "下载图纸失败" });
                 }
 
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
-                    return JsonSerializer.Serialize(new { success = false, message = "δ�ҵ�CAD�ĵ�" });
+                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
 
-                doc.SendStringToExecute("ZWCAD_����1 ", true, false, false);
+                doc.SendStringToExecute("ZWCAD_出库1 ", true, false, false);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = "���������ѷ��ͣ�����CAD��ѡ������"
+                    message = "出库命令已发送，请在CAD中选择插入点"
                 });
             }
             catch (Exception ex)
@@ -299,20 +287,20 @@ namespace ZrxDotNetCSProject5
                     return JsonSerializer.Serialize(new
                     {
                         success = false,
-                        message = "����ͼֽʧ��"
+                        message = "下载图纸失败"
                     });
                 }
 
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
-                    return JsonSerializer.Serialize(new { success = false, message = "δ�ҵ�CAD�ĵ�" });
+                    return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
 
-                doc.SendStringToExecute("ZWCAD_����1_Explode ", true, false, false);
+                doc.SendStringToExecute("ZWCAD_出库1_Explode ", true, false, false);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = "ը�����������ѷ��ͣ�����CAD��ѡ������"
+                    message = "炸开出库命令已发送，请在CAD中选择插入点"
                 });
             }
             catch (Exception ex)
@@ -321,12 +309,14 @@ namespace ZrxDotNetCSProject5
             }
         }
     }
+
     public partial class LibraryManageWeb
     {
         private async Task DownloadFileAsync(string fileUrl, string localPath)
         {
             await CadHelper.DownloadFileAsync(httpClient, fileUrl, localPath);
         }
+
         public async Task<bool> PrepareExportFile(long drawingId)
         {
             string apiUrl = $"api/drawings/detail?id={drawingId}";
@@ -338,10 +328,10 @@ namespace ZrxDotNetCSProject5
                 {
                     var errorBody = await response.Content.ReadAsStringAsync();
                     MessageBox.Show(
-                        $"�����ļ�׼��ʧ�ܣ�HTTP {response.StatusCode}\n\n" +
-                        $"��Ӧ����: {errorBody?.Substring(0, Math.Min(500, errorBody?.Length ?? 0))}\n\n" +
-                        $"����URL: {httpClient.BaseAddress}{apiUrl}",
-                        "�����������");
+                        $"出库文件准备失败：HTTP {response.StatusCode}\n\n" +
+                        $"响应内容: {errorBody?.Substring(0, Math.Min(500, errorBody?.Length ?? 0))}\n\n" +
+                        $"请求URL: {httpClient.BaseAddress}{apiUrl}",
+                        "出库错误详情");
                     return false;
                 }
 
@@ -382,20 +372,21 @@ namespace ZrxDotNetCSProject5
             catch (HttpRequestException ex)
             {
                 MessageBox.Show(
-                    $"�����ļ�׼��ʧ�� (HTTP����)��\n\n{ex.Message}\n\n" +
-                    $"����URL: {httpClient.BaseAddress}{apiUrl}",
-                    "�����������");
+                    $"出库文件准备失败 (HTTP错误)：\n\n{ex.Message}\n\n" +
+                    $"请求URL: {httpClient.BaseAddress}{apiUrl}",
+                    "出库错误详情");
                 return false;
             }
             catch (JsonException ex)
             {
                 MessageBox.Show(
-                    $"�����ļ�׼��ʧ�� (JSON��������)��\n\n{ex.Message}\n\n" +
-                    $"����URL: {httpClient.BaseAddress}{apiUrl}",
-                    "�����������");
+                    $"出库文件准备失败 (JSON解析错误)：\n\n{ex.Message}\n\n" +
+                    $"请求URL: {httpClient.BaseAddress}{apiUrl}",
+                    "出库错误详情");
                 return false;
             }
         }
+
         internal async Task<(bool success, string message)> UploadDrawingsToBackend(long typeId, string customDescProp = "")
         {
             try
@@ -406,28 +397,28 @@ namespace ZrxDotNetCSProject5
 
                 if (!Directory.Exists(outputDir))
                 {
-                    return (false, "rukuĿ¼������: " + outputDir);
+                    return (false, "ruku目录不存在: " + outputDir);
                 }
 
                 var files = new DirectoryInfo(outputDir).GetFiles()
                     .OrderByDescending(f => f.LastWriteTime).ToList();
 
                 var dwgFile = files.FirstOrDefault(f => f.Extension.ToLower() == ".dwg");
-                var pngFile = files.FirstOrDefault(f => f.Name.EndsWith(".png") && !f.Name.Contains("����ͼ"));
-                var thumbFile = files.FirstOrDefault(f => f.Name.Contains("����ͼ"));
+                var pngFile = files.FirstOrDefault(f => f.Name.EndsWith(".png") && !f.Name.Contains("缩略图"));
+                var thumbFile = files.FirstOrDefault(f => f.Name.Contains("缩略图"));
 
                 if (dwgFile == null)
-                    return (false, "δ�ҵ�DWG�ļ�");
+                    return (false, "未找到DWG文件");
                 if (pngFile == null)
-                    return (false, "δ�ҵ�PNGԤ��ͼ ���� CAD����������δ����Ԥ��ͼ");
+                    return (false, "未找到PNG预览图");
                 if (thumbFile == null)
-                    return (false, "δ�ҵ�����ͼ");
+                    return (false, "未找到缩略图");
 
                 string descProp = !string.IsNullOrEmpty(customDescProp)
                     ? customDescProp
                     : await GetDescPropForNode(typeId);
                 if (descProp == null)
-                    return (false, "��ȡ���Զ���ʧ�ܣ�typeId=" + typeId);
+                    return (false, "获取属性定义失败，typeId=" + typeId);
 
                 using (var content = new MultipartFormDataContent())
                 {
@@ -445,9 +436,9 @@ namespace ZrxDotNetCSProject5
                         var root = doc.RootElement;
                         var code = root.GetProperty("code").GetInt32();
                         if (code == 200)
-                            return (true, "���ɹ�");
-                        var msg = root.TryGetProperty("message", out var m) ? m.GetString() : "δ֪����";
-                        return (false, $"API����code={code}: {msg}");
+                            return (true, "入库成功");
+                        var msg = root.TryGetProperty("message", out var m) ? m.GetString() : "未知错误";
+                        return (false, $"API返回code={code}: {msg}");
                     }
                 }
             }
@@ -456,6 +447,7 @@ namespace ZrxDotNetCSProject5
                 return (false, ex.Message);
             }
         }
+
         private async Task<string> GetDescPropForNode(long cabinetId)
         {
             try
@@ -464,13 +456,14 @@ namespace ZrxDotNetCSProject5
             }
             catch (Exception ex)
             {
-                MessageBox.Show("��ȡ���Զ���ʧ�ܣ�\n" + ex.Message);
+                MessageBox.Show("获取属性定义失败：\n" + ex.Message);
                 return "{}";
             }
         }
+
         internal async Task<bool> SendCommandAndWaitAsync(Document doc, string executeString, string commandName)
         {
             return await CadHelper.SendCommandAndWaitAsync(doc, executeString, commandName);
         }
     }
-    }
+}
