@@ -77,7 +77,7 @@ namespace ZrxDotNetCSProject5
                 {
                     this.Invoke(new Action(() =>
                     {
-                        //browser.ShowDevTools();
+                        browser.ShowDevTools();
                     }));
                 }
             };
@@ -181,34 +181,23 @@ namespace ZrxDotNetCSProject5
             }));
         }
 
-        public void OpenDrawingDetail(long drawingId)
+        public void openDrawingDetail(long drawingId, string token = "")
         {
-            _parent.BeginInvoke(new Action(() => {
-                try
+            try
+            {
+                _parent.BeginInvoke(new Action(() =>
                 {
-                    var dlg = new DrawingDetailDialog(drawingId, _parent.HttpClient,
-                        exportAction: async (id) => {
-                            var result = await StartExport(id);
-                            JsonDocument data = JsonDocument.Parse(result);
-                            bool ok = data.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
-                            data.Dispose();
-                            return ok;
-                        },
-                        exportExplodeAction: async (id) => {
-                            var result = await StartExportExplode(id);
-                            JsonDocument data = JsonDocument.Parse(result);
-                            bool ok = data.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
-                            data.Dispose();
-                            return ok;
-                        });
-                    dlg.StartPosition = FormStartPosition.CenterParent;
+                    var dlg = new AntdDetailForm(drawingId, _parent.HttpClient, token);
                     dlg.ShowDialog(_parent);
-                }
-                catch (Exception ex)
+                }));
+            }
+            catch (Exception ex)
+            {
+                _parent.BeginInvoke(new Action(() =>
                 {
-                    MessageBox.Show("打开图纸详情失败: " + ex.Message);
-                }
-            }));
+                    MessageBox.Show("弹窗失败: " + ex.Message);
+                }));
+            }
         }
 
         public async Task<string> DeleteDrawing(long id)
@@ -225,6 +214,10 @@ namespace ZrxDotNetCSProject5
         {
             try
             {
+                if (!string.IsNullOrEmpty(token))
+                    _parent.HttpClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
                 var doc = CadApp.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                     return JsonSerializer.Serialize(new { success = false, message = "未找到CAD文档" });
